@@ -6,7 +6,8 @@
 const { StagePresence } = require('./stage-presence');
 
 class StageFleet {
-  constructor({ client, player, topic, store, log = console, makePresence = (opts) => new StagePresence(opts) } = {}) {
+  constructor({ client, player, topic, store, log = console, trace = null, makePresence = (opts) => new StagePresence(opts) } = {}) {
+    this.trace = trace;
     this.client = client;
     this.player = player;
     this.topic = topic;
@@ -24,7 +25,7 @@ class StageFleet {
 
   open(guildId, channelId) {
     const presence = this.makePresence({
-      client: this.client, channelId, player: this.player, topic: this.topic, log: this.log,
+      client: this.client, channelId, player: this.player, topic: this.topic, log: this.log, trace: this.trace,
       onGone: () => this.forget(guildId, presence),
     });
     if (this.currentTopic) presence.wantedTopic = this.currentTopic;
@@ -66,9 +67,9 @@ class StageFleet {
 
   get size() { return this.byGuild.size; }
 
-  onOwnVoiceState(state) {
+  onOwnVoiceState(state, old = null) {
     const presence = this.byGuild.get(state.guild.id);
-    if (presence) presence.onOwnVoiceState(state);
+    if (presence) presence.onOwnVoiceState(state, old);
   }
 
   async setTopic(text) {

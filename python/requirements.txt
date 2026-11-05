@@ -1,0 +1,4 @@
+discord.py[voice]==2.7.1
+# davey 0.2.0 (Nov 2026) has reports of silent bots; stay on 0.1.x for now.
+davey>=0.1.7,<0.2
+imageio-ffmpeg>=0.5

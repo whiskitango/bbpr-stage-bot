@@ -26,8 +26,9 @@ class StagePresence {
 
   constructor({
     client, channelId, player, topic, onGone = () => {}, log = console,
-    timers = { setTimeout, clearTimeout },
+    timers = { setTimeout, clearTimeout }, trace = null,
   } = {}) {
+    this.trace = trace;
     this.client = client;
     this.channelId = channelId;
     this.player = player;
@@ -70,18 +71,34 @@ class StagePresence {
       channelId: channel.id,
       guildId: channel.guild.id,
       adapterCreator: channel.guild.voiceAdapterCreator,
-      selfDeaf: true,
+      // Deafened also means muted to Discord, and a Stage silences a muted
+      // speaker; in a plain voice channel deafening is harmless and saves
+      // receiving everyone else's audio.
+      selfDeaf: !this.isStage,
+      selfMute: false,
+      debug: Boolean(this.trace && this.trace.enabled),
     });
     this.connection = conn;
+    if (this.trace) this.trace.watchConnection(conn, this.label);
     conn.on(VoiceConnectionStatus.Disconnected, () => this.recover(conn));
     conn.on('error', (err) => this.log.warn(`[stage] ${this.label}: ${err.message}`));
     await entersState(conn, VoiceConnectionStatus.Ready, READY_MS);
+    // On a Stage, become a speaker before sending any audio: Discord drops
+    // audio from the audience, and the "speaking" signal sent with the first
+    // packet is not sent again by itself.
+    if (this.isStage) {
+      await this.openStage();
+      await this.speak();
+    }
     conn.subscribe(this.player);
     this.log.info(`[stage] joined ${this.label}${this.isStage ? '' : ' (a voice channel, not a Stage)'}`);
-    if (!this.isStage) return;            // a voice channel has no stage, speakers or topic
-    await this.openStage();
-    await this.speak();
-    if (this.wantedTopic) await this.setTopic(this.wantedTopic);
+    if (this.isStage && this.wantedTopic) await this.setTopic(this.wantedTopic);
+  }
+
+  // Makes the next audio packet send a fresh "speaking" signal, so listeners
+  // hear the bot after it has moved from the audience to the speakers.
+  announceSpeaking() {
+    if (this.connection) this.connection.setSpeaking(false);
   }
 
   // Join, and keep trying if it fails for a reason that may pass.
@@ -128,9 +145,12 @@ class StagePresence {
     }
   }
 
-  // The bot's own voice state changed: moved back to the audience, step up.
-  onOwnVoiceState(state) {
-    if (this.isStage && state.channelId === this.channelId && state.suppress) this.speak();
+  // The bot's own voice state changed: moved back to the audience, step up;
+  // made a speaker, tell Discord it is speaking again.
+  onOwnVoiceState(state, old = null) {
+    if (!this.isStage || state.channelId !== this.channelId) return;
+    if (state.suppress) this.speak();
+    else if (!old || old.suppress || old.channelId !== this.channelId) this.announceSpeaking();
   }
 
   // Remembered, so a song that changes before the bot is on stage still

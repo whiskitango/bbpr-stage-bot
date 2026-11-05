@@ -12,6 +12,7 @@ const { AllowedServers } = require('./allowed-servers');
 const { NowPlayingWatch } = require('./now-playing-watch');
 const { StageTopic } = require('./stage-topic');
 const { FfmpegLocator } = require('./ffmpeg-locator');
+const { VoiceTrace } = require('./voice-trace');
 
 class StageBot {
   constructor({ config, log = console, ffmpeg = FfmpegLocator.find() } = {}) {
@@ -20,16 +21,18 @@ class StageBot {
     this.client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates] });
     this.source = new StreamSource({ url: config.streamUrl, ffmpeg, bitrate: config.bitrate, log });
     this.radio = new RadioPlayer({ source: this.source, log });
+    this.trace = new VoiceTrace({ enabled: config.voiceDebug, log });
+    this.trace.watchPlayer(this.radio.player);
     this.store = new ChannelStore({ file: config.channelsFile, log }).load();
     this.allowed = new AllowedServers(config.allowedGuildIds);
-    this.fleet = new StageFleet({ client: this.client, player: this.radio.player, topic: config.topic, store: this.store, log });
+    this.fleet = new StageFleet({ client: this.client, player: this.radio.player, topic: config.topic, store: this.store, log, trace: this.trace });
     this.commands = new RadioCommands({ fleet: this.fleet, allowed: this.allowed, station: config.topic, log });
     this.watch = new NowPlayingWatch({ url: config.nowPlayingUrl, onChange: (song) => this.onSong(song), log });
 
     this.client.once(Events.ClientReady, () => this.ready());
     this.client.on(Events.InteractionCreate, (i) => this.commands.handle(i));
-    this.client.on(Events.VoiceStateUpdate, (_old, now) => {
-      if (now.id === this.client.user.id) this.fleet.onOwnVoiceState(now);
+    this.client.on(Events.VoiceStateUpdate, (old, now) => {
+      if (now.id === this.client.user.id) this.fleet.onOwnVoiceState(now, old);
     });
     // Removed from a server: stop trying to play there.
     this.client.on(Events.GuildDelete, (guild) => this.fleet.leave(guild.id));
@@ -77,6 +80,7 @@ class StageBot {
 
   async stop() {
     this.watch.stop();
+    this.trace.stop();
     this.fleet.leaveAll();
     this.radio.stop();
     await this.client.destroy();

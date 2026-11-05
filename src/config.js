@@ -15,8 +15,9 @@ class Config {
   constructor({
     token = '', stageChannelIds = [], allowedGuildIds = [],
     streamUrl = STREAM_DEFAULT, nowPlayingUrl = NOW_PLAYING_DEFAULT,
-    topic = 'Booty Bay Pirate Radio', bitrate = 128, dataDir = DATA_DEFAULT,
+    topic = 'Booty Bay Pirate Radio', bitrate = 128, dataDir = DATA_DEFAULT, voiceDebug = false,
   } = {}) {
+    this.voiceDebug = voiceDebug;             // log voice connection and player detail
     this.token = token;
     this.stageChannelIds = stageChannelIds;   // channels to join at start, besides those /radio join saved
     this.allowedGuildIds = allowedGuildIds;   // empty: any server the bot is in
@@ -38,6 +39,7 @@ class Config {
       topic: pick('STAGE_TOPIC', 'Booty Bay Pirate Radio'),
       bitrate: Number(pick('BITRATE', '128')) || 128,
       dataDir: pick('DATA_DIR', DATA_DEFAULT) || DATA_DEFAULT,
+      voiceDebug: ['1', 'true', 'yes'].includes(pick('VOICE_DEBUG', '').toLowerCase()),
     });
   }
 
