@@ -14,6 +14,8 @@ STREAM_DEFAULT = 'https://radio.octowow.st/listen/booty_bay_pirate_radio/radio.m
 NOW_PLAYING_DEFAULT = 'https://radio.octowow.st/api/nowplaying/booty_bay_pirate_radio'
 TOPIC_DEFAULT = 'Booty Bay Pirate Radio'
 DATA_DEFAULT = ROOT / 'data'
+STATUS_HOST_DEFAULT = '127.0.0.1'
+STATUS_TOKEN_MIN = 24
 
 
 def id_list(text: str) -> List[str]:
@@ -24,7 +26,9 @@ class Config:
     def __init__(self, token: str = '', stage_channel_ids: Optional[List[str]] = None,
                  allowed_guild_ids: Optional[List[str]] = None, stream_url: str = STREAM_DEFAULT,
                  now_playing_url: str = NOW_PLAYING_DEFAULT, topic: str = TOPIC_DEFAULT,
-                 bitrate: int = 128, data_dir: Path = DATA_DEFAULT, voice_debug: bool = False):
+                 bitrate: int = 128, data_dir: Path = DATA_DEFAULT, voice_debug: bool = False,
+                 status_port: int = 0, status_host: str = STATUS_HOST_DEFAULT, status_token: str = '',
+                 status_tls_cert: str = '', status_tls_key: str = '', station: str = ''):
         self.token = token
         self.stage_channel_ids = stage_channel_ids or []   # joined at start, besides saved ones
         self.allowed_guild_ids = allowed_guild_ids or []   # empty: any server the bot is in
@@ -34,6 +38,12 @@ class Config:
         self.bitrate = bitrate                             # kbps sent to Discord
         self.data_dir = Path(data_dir)
         self.voice_debug = voice_debug
+        self.status_port = status_port                     # 0: no status page (see status_server.py)
+        self.status_host = status_host
+        self.status_token = status_token
+        self.status_tls_cert = status_tls_cert
+        self.status_tls_key = status_tls_key
+        self.station_name = station                        # '' : taken from the stream address
 
     @classmethod
     def from_env(cls, env: Optional[Mapping[str, str]] = None) -> 'Config':
@@ -47,6 +57,10 @@ class Config:
             bitrate = int(pick('BITRATE', '128')) or 128
         except ValueError:
             bitrate = 128
+        try:
+            status_port = int(pick('STATUS_PORT', '0') or 0)
+        except ValueError:
+            status_port = 0
         return cls(
             token=pick('DISCORD_TOKEN', ''),
             stage_channel_ids=id_list(pick('STAGE_CHANNEL_ID', '')),
@@ -57,7 +71,22 @@ class Config:
             bitrate=bitrate,
             data_dir=Path(pick('DATA_DIR', '') or DATA_DEFAULT),
             voice_debug=pick('VOICE_DEBUG', '').lower() in ('1', 'true', 'yes'),
+            status_port=status_port,
+            status_host=pick('STATUS_HOST', '') or STATUS_HOST_DEFAULT,
+            status_token=pick('STATUS_TOKEN', ''),
+            status_tls_cert=pick('STATUS_TLS_CERT', ''),
+            status_tls_key=pick('STATUS_TLS_KEY', ''),
+            station=pick('STATION', ''),
         )
+
+    @property
+    def station(self) -> str:
+        """The station's short name, which radio-metrics matches its counts by:
+        STATION if set, otherwise the part after /listen/ in the stream address."""
+        if self.station_name:
+            return self.station_name
+        found = re.search(r'/listen/([^/]+)/', self.stream_url or '')
+        return found.group(1) if found else ''
 
     @property
     def channels_file(self) -> Path:
@@ -66,4 +95,9 @@ class Config:
     def missing(self) -> List[str]:
         """Names of required settings that are missing; empty when ready."""
         need = {'DISCORD_TOKEN': self.token, 'STREAM_URL': self.stream_url}
+        if self.status_port:
+            # Long enough that guessing it over the network is hopeless.
+            need[f'STATUS_TOKEN (at least {STATUS_TOKEN_MIN} characters)'] = len(self.status_token) >= STATUS_TOKEN_MIN
+            if bool(self.status_tls_cert) != bool(self.status_tls_key):
+                need['STATUS_TLS_CERT and STATUS_TLS_KEY (both, or neither)'] = False
         return [name for name, value in need.items() if not value]

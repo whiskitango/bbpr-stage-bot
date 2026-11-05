@@ -81,12 +81,40 @@ docker compose logs -f        (to watch it start)
 | `BITRATE` | no | Kbps sent to Discord, 128 by default (Discord plays up to the server's voice bitrate) |
 | `DATA_DIR` | no | Where joined channels are saved |
 | `FFMPEG_PATH` | no | A specific ffmpeg to use |
+| `STATUS_PORT` | no | Turns on the listener-count page for radio-metrics (see below) |
+| `STATUS_TOKEN` | with `STATUS_PORT` | The password radio-metrics sends, at least 24 characters |
+| `STATUS_HOST` | no | Where the page listens. `127.0.0.1` (this machine only) by default |
+| `STATUS_TLS_CERT`, `STATUS_TLS_KEY` | no | A certificate and its key, to serve the page over https |
+| `STATION` | no | The station's short name the counts are for. Taken from `STREAM_URL` by default |
+
+## Discord counts in radio-metrics
+
+With `STATUS_PORT` set, the bot answers `GET /status` with how many people are listening in each
+channel it plays in. The count includes speakers and the audience, but not bots or anyone who has
+deafened themselves. Only an `Authorization: Bearer <STATUS_TOKEN>` request gets an answer.
+
+```json
+{ "station": "booty_bay_pirate_radio", "at": 1790000000000, "listeners": 5,
+  "channels": [{ "server": "Pirates", "channel": "Radio Room", "kind": "stage", "playing": true, "listeners": 5 }] }
+```
+
+In radio-metrics, go to Settings → Alerts → Discord Stage bot and enter the address and the token.
+
+radio-metrics sends the token over plain http only to its own PC or the local network. So, for the bot on the
+AzuraCast server, use one of these:
+
+- **https:** set `STATUS_HOST=0.0.0.0`, point `STATUS_TLS_CERT`/`STATUS_TLS_KEY` at a certificate
+  for the server's name, open the port in the firewall, and enter `https://your.server:8790`. A renewed
+  certificate is picked up within a few hours without a restart.
+- **SSH tunnel:** leave the page on `127.0.0.1`, run `ssh -N -L 8790:127.0.0.1:8790 you@your.server`
+  on the PC, and enter `http://127.0.0.1:8790`.
 
 ## Good to know
 
 - **Royalty and stats counts.** AzuraCast sees the bot as **one** listener, however many people
   and servers are listening through it. So the station's listener numbers and the SoundExchange
-  report undercount Discord listeners.
+  report undercount Discord listeners. radio-metrics can show the Discord count beside them
+  (see *Discord counts in radio-metrics*).
 - **Ending the Stage.** If a moderator ends the Stage while the bot is in it, the bot keeps playing in
   the channel and opens the Stage again the next time it joins. To take it off air on a server, use `/radio leave`.
 - **Deleted channels.** If a channel is deleted, or the bot loses access to it, the bot gives up on it and forgets it.

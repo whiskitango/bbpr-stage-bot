@@ -6,7 +6,7 @@ with the ChannelStore."""
 from __future__ import annotations
 
 import asyncio
-from typing import Callable, Dict, Optional
+from typing import Callable, Dict, List, Optional
 
 import discord
 
@@ -75,6 +75,9 @@ class StageFleet:
 
     def get(self, guild_id) -> Optional[StagePresence]:
         return self.by_guild.get(str(guild_id))
+
+    def presences(self) -> List[StagePresence]:
+        return list(self.by_guild.values())
 
     async def on_own_voice_state(self, guild_id, after: discord.VoiceState) -> None:
         presence = self.get(guild_id)
