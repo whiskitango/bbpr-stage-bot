@@ -2,6 +2,8 @@
 // changes, so the Stage topic and the bot's status can follow along. A failed
 // check is skipped quietly; the music doesn't depend on it.
 
+const { LiveActs } = require('./live-acts');
+
 class NowPlayingWatch {
   constructor({ url, onChange, every = 30000, fetcher = fetch, log = console, timers = { setInterval, clearInterval } } = {}) {
     this.url = url;
@@ -14,12 +16,18 @@ class NowPlayingWatch {
     this.timer = null;
   }
 
-  static songOf(body) {
-    const song = body && body.now_playing && body.now_playing.song;
-    if (!song) return '';
-    const text = song.artist && song.title ? `${song.artist} - ${song.title}` : (song.text || '');
-    const dj = body.live && body.live.is_live && body.live.streamer_name;
-    return dj ? `LIVE: ${dj} | ${text}` : text;
+  // "Artist - Title" normally; "DJ Whiski - Title" while a DJ is live, with
+  // the DJ's name spelled as in LiveActs. A DJ whose software sends no song
+  // details, or only their own name, shows as just their name.
+  static songOf(body, acts = new LiveActs()) {
+    const song = (body && body.now_playing && body.now_playing.song) || {};
+    const raw = body && body.live && body.live.is_live && body.live.streamer_name;
+    if (raw && raw.trim()) {
+      const dj = acts.nameOf(raw);
+      const title = song.title || song.text || '';
+      return title && !acts.same(title, dj) ? `${dj} - ${title}` : dj;
+    }
+    return song.artist && song.title ? `${song.artist} - ${song.title}` : (song.text || '');
   }
 
   start() {

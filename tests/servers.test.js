@@ -128,3 +128,17 @@ test('/radio join with no channel asks for one', async () => {
   await cmds.handle(i);
   assert.match(i.replies[0], /Join a Stage first/);
 });
+
+test('StagePresence re-announces speaking when it becomes a speaker, and steps up when moved to the audience', () => {
+  const { StagePresence } = require('../src/stage-presence');
+  const p = new StagePresence({ channelId: 'c', log: { info() {}, warn() {} } });
+  p.isStage = true;
+  const calls = [];
+  p.connection = { setSpeaking: (v) => calls.push(`speaking:${v}`) };
+  p.speak = () => calls.push('speak');
+  p.onOwnVoiceState({ channelId: 'c', suppress: false }, { channelId: 'c', suppress: true });
+  p.onOwnVoiceState({ channelId: 'c', suppress: false }, { channelId: 'c', suppress: false });
+  p.onOwnVoiceState({ channelId: 'c', suppress: true }, { channelId: 'c', suppress: false });
+  p.onOwnVoiceState({ channelId: 'other', suppress: false }, null);
+  assert.deepEqual(calls, ['speaking:false', 'speak']);
+});

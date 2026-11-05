@@ -47,7 +47,18 @@ test('StageTopic adds the song and keeps within 120 characters', () => {
 test('NowPlayingWatch reads the song, marks live DJs and reports changes only', async () => {
   assert.equal(NowPlayingWatch.songOf({ now_playing: { song: { artist: 'A', title: 'B' } } }), 'A - B');
   assert.equal(NowPlayingWatch.songOf({ now_playing: { song: { text: 'Just text' } } }), 'Just text');
-  assert.equal(NowPlayingWatch.songOf({ now_playing: { song: { artist: 'A', title: 'B' } }, live: { is_live: true, streamer_name: 'DJ X' } }), 'LIVE: DJ X | A - B');
+  const live = { is_live: true, streamer_name: 'DJ Whiski' };
+  assert.equal(NowPlayingWatch.songOf({ now_playing: { song: { artist: 'A', title: 'Song Name' } }, live }), 'DJ Whiski - Song Name');
+  assert.equal(NowPlayingWatch.songOf({ now_playing: { song: { text: 'Mix 3' } }, live }), 'DJ Whiski - Mix 3');
+  assert.equal(NowPlayingWatch.songOf({ now_playing: { song: { title: '' } }, live }), 'DJ Whiski');
+  assert.equal(NowPlayingWatch.songOf({ now_playing: { song: { title: 'DJ Whiski' } }, live }), 'DJ Whiski');
+  const as = (name, title = 'T') => NowPlayingWatch.songOf({ now_playing: { song: { title } }, live: { is_live: true, streamer_name: name } });
+  assert.equal(as('whiski'), 'DJ Whiski - T');
+  assert.equal(as('dj_tekeela'), 'DJ Tekeela - T');
+  assert.equal(as('MOSSA'), 'DJ Mossa - T');
+  assert.equal(as('holdenn'), 'Judge Holdenn - T');
+  assert.equal(as('Judge Holdenn', 'holdenn'), 'Judge Holdenn');
+  assert.equal(as('Guest Act'), 'Guest Act - T');
   assert.equal(NowPlayingWatch.songOf({}), '');
 
   const bodies = [
