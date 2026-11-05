@@ -1,0 +1,20 @@
+{
+  "name": "bbpr-stage-bot",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A Discord bot that sits on a Stage channel and plays the station's stream.",
+  "main": "index.js",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=22.12"
+  },
+  "scripts": {
+    "start": "node index.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "@discordjs/voice": "^0.19.2",
+    "discord.js": "^14.28.1",
+    "ffmpeg-static": "^5.3.0"
+  }
+}

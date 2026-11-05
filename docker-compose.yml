@@ -1,0 +1,10 @@
+services:
+  stage-bot:
+    build: .
+    env_file: .env
+    restart: unless-stopped
+    volumes:
+      - stage-bot-data:/data
+
+volumes:
+  stage-bot-data:
