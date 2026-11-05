@@ -1,7 +1,9 @@
 """The bot as a whole: log in to Discord, keep the station's stream playing,
 keep a seat on every server's Stage it was asked to join, answer /radio, and
 show the song on air as its "Listening to" status. The Stage topic stays
-the station's name: changing it posts a notice in the Stage chat each song."""
+the station's name: changing it posts a notice in the Stage chat each song.
+With STATUS_PORT set, it also serves how many people are listening, for
+radio-metrics (status_server.py)."""
 
 from __future__ import annotations
 
@@ -18,6 +20,8 @@ from .now_playing import NowPlayingWatch
 from .radio_commands import RadioCommands
 from .radio_stream import RadioStream
 from .stage_fleet import StageFleet
+from .status_report import StatusReport
+from .status_server import StatusServer
 
 log = logging.getLogger('stagebot')
 
@@ -36,9 +40,16 @@ class StageBot(discord.Client):
         self.tree = app_commands.CommandTree(self)
         self.tree.add_command(RadioCommands(self.fleet, self.allowed, config.topic))
         self.watch = NowPlayingWatch(config.now_playing_url, self.on_song)
+        self.status_page = StatusServer(
+            config.status_host, config.status_port, config.status_token,
+            StatusReport(self, self.fleet, config.station).build,
+            tls_cert=config.status_tls_cert, tls_key=config.status_tls_key,
+        ) if config.status_port else None
         self.started = False
 
     async def setup_hook(self) -> None:
+        if self.status_page:
+            await self.status_page.start()
         try:
             await self.tree.sync()
             log.info('[commands] /radio registered')
@@ -93,6 +104,8 @@ class StageBot(discord.Client):
     async def shutdown(self) -> None:
         log.info('Leaving the Stage...')
         self.watch.stop()
+        if self.status_page:
+            await self.status_page.stop()
         await self.fleet.leave_all()
         self.stream.stop()
         await self.close()
