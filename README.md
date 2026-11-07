@@ -91,10 +91,11 @@ docker compose logs -f        (to watch it start)
 
 With `STATUS_PORT` set, the bot answers `GET /status` with how many people are listening in each
 channel it plays in. The count includes speakers and the audience, but not bots or anyone who has
-deafened themselves. Only an `Authorization: Bearer <STATUS_TOKEN>` request gets an answer.
+deafened themselves. `servers` is how many servers have the bot installed, whether it plays there or not.
+Only an `Authorization: Bearer <STATUS_TOKEN>` request gets an answer.
 
 ```json
-{ "station": "booty_bay_pirate_radio", "at": 1790000000000, "listeners": 5,
+{ "station": "booty_bay_pirate_radio", "at": 1790000000000, "listeners": 5, "servers": 3,
   "channels": [{ "server": "Pirates", "channel": "Radio Room", "kind": "stage", "playing": true, "listeners": 5 }] }
 ```
 

@@ -55,13 +55,15 @@ class StatusReportTest(unittest.TestCase):
         a = channel('Radio Room', FakeGuild('Pirates'), {BOT: state(), 3: state(), 5: state()})
         b = channel('Lounge', FakeGuild('Friends'), {BOT: state(), 3: state()})
         channels = {10: a, 20: b}
-        client = SimpleNamespace(user=SimpleNamespace(id=BOT), get_channel=channels.get)
+        client = SimpleNamespace(user=SimpleNamespace(id=BOT), get_channel=channels.get,
+                                 guilds=[a.guild, b.guild, FakeGuild('Installed, not playing')])
         fleet = SimpleNamespace(presences=lambda: [presence(10), presence(20, ready=False)])
         report = StatusReport(client, fleet, 'booty_bay_pirate_radio', clock=lambda: 1_790_000_000.5).build()
         self.assertEqual(report, {
             'station': 'booty_bay_pirate_radio',
             'at': 1_790_000_000_500,
             'listeners': 2,
+            'servers': 3,
             'channels': [
                 {'server': 'Pirates', 'channel': 'Radio Room', 'kind': 'voice', 'playing': True, 'listeners': 2},
                 {'server': 'Friends', 'channel': 'Lounge', 'kind': 'voice', 'playing': False, 'listeners': 1},

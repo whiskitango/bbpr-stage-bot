@@ -3,6 +3,9 @@ playing and how many people are in there, plus a total. The total counts
 only the channels where the station is actually playing, because people in a
 Stage the bot hasn't reached yet aren't hearing the station.
 
+"servers" is how many servers have the bot installed, playing or not, so a
+reader can see how far it has spread beyond the servers it plays in.
+
 The station's short name is included so a reader (radio-metrics) can tell
 which station the counts belong to."""
 
@@ -47,5 +50,6 @@ class StatusReport:
             'station': self.station,
             'at': int(self.clock() * 1000),
             'listeners': sum(c['listeners'] for c in channels if c['playing']),
+            'servers': len(self.client.guilds),
             'channels': channels,
         }
