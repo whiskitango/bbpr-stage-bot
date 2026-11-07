@@ -19,6 +19,7 @@ import discord
 from discord.oggparse import OggStream
 
 from .backoff import Backoff
+from .volume import Volume
 
 log = logging.getLogger('stagebot')
 
@@ -57,17 +58,20 @@ class RadioListener(discord.AudioSource):
 
 
 class FfmpegCommand:
-    """The ffmpeg arguments that turn the station's stream into Ogg Opus.
-    Its reconnect flags ride out short network blips without a gap."""
+    """The ffmpeg arguments that turn the station's stream into Ogg Opus at
+    the bot's volume. Its reconnect flags ride out short network blips
+    without a gap."""
 
     @staticmethod
-    def args(ffmpeg: str, url: str, bitrate: int) -> List[str]:
+    def args(ffmpeg: str, url: str, bitrate: int, volume: Optional[Volume] = None) -> List[str]:
+        volume = volume or Volume()
         return [
             ffmpeg, '-hide_banner', '-loglevel', 'error',
             '-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_on_network_error', '1',
             '-reconnect_delay_max', '5',
             '-i', url,
-            '-vn', '-c:a', 'libopus', '-b:a', f'{bitrate}k', '-ar', '48000', '-ac', '2',
+            '-vn', '-af', volume.ffmpeg_filter(),
+            '-c:a', 'libopus', '-b:a', f'{bitrate}k', '-ar', '48000', '-ac', '2',
             '-frame_duration', '20', '-application', 'audio',
             # Small Ogg pages: by default ffmpeg writes about a second at a time.
             '-f', 'ogg', '-page_duration', '20000', '-flush_packets', '1', 'pipe:1',
@@ -75,10 +79,12 @@ class FfmpegCommand:
 
 
 class RadioStream:
-    def __init__(self, url: str, ffmpeg: str = 'ffmpeg', bitrate: int = 128, backoff: Optional[Backoff] = None):
+    def __init__(self, url: str, ffmpeg: str = 'ffmpeg', bitrate: int = 128, backoff: Optional[Backoff] = None,
+                 volume: Optional[Volume] = None):
         self.url = url
         self.ffmpeg = ffmpeg
         self.bitrate = bitrate
+        self.volume = volume or Volume()
         self.backoff = backoff or Backoff()
         self.listeners: Set[RadioListener] = set()
         self.lock = threading.Lock()
@@ -119,11 +125,11 @@ class RadioStream:
             self.stopping.wait(wait)
 
     def play_once(self) -> None:
-        log.info('[player] opening the stream')
+        log.info(f'[player] opening the stream at {self.volume.percent}% volume')
         self.backoff.started()
         try:
             self.proc = subprocess.Popen(
-                FfmpegCommand.args(self.ffmpeg, self.url, self.bitrate),
+                FfmpegCommand.args(self.ffmpeg, self.url, self.bitrate, self.volume),
                 stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
             )
         except OSError as err:

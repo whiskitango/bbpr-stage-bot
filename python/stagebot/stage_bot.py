@@ -33,7 +33,8 @@ class StageBot(discord.Client):
         intents.voice_states = True
         super().__init__(intents=intents)
         self.config = config
-        self.stream = RadioStream(config.stream_url, ffmpeg or FfmpegLocator.find(), config.bitrate)
+        self.stream = RadioStream(config.stream_url, ffmpeg or FfmpegLocator.find(), config.bitrate,
+                                  volume=config.volume)
         self.store = ChannelStore(config.channels_file).load()
         self.allowed = AllowedServers(config.allowed_guild_ids)
         self.fleet = StageFleet(self, self.stream, config.topic, self.store, voice_debug=config.voice_debug)
