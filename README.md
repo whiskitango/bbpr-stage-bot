@@ -79,6 +79,7 @@ docker compose logs -f        (to watch it start)
 | `NOW_PLAYING_URL` | no | AzuraCast's now-playing API for the topic. Set it to nothing to turn this off |
 | `STAGE_TOPIC` | no | The Stage's name. Defaults to *Booty Bay Pirate Radio* |
 | `BITRATE` | no | Kbps sent to Discord, 128 by default (Discord plays up to the server's voice bitrate) |
+| `VOLUME` | no | How loud it plays, as a % of the station's level: 1 to 100, 50 by default. The station is loud and Discord plays a bot at full volume, so full level blasts a Stage when the bot joins |
 | `DATA_DIR` | no | Where joined channels are saved |
 | `FFMPEG_PATH` | no | A specific ffmpeg to use |
 | `STATUS_PORT` | no | Turns on the listener-count page for radio-metrics (see below) |

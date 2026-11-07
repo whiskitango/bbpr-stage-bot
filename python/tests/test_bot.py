@@ -11,6 +11,7 @@ from stagebot.instance_lock import InstanceLock
 from stagebot.live_acts import LiveActs
 from stagebot.now_playing import NowPlayingWatch
 from stagebot.radio_stream import SILENCE, FfmpegCommand, RadioStream
+from stagebot.volume import Volume
 
 
 class ConfigTest(unittest.TestCase):
@@ -27,6 +28,11 @@ class ConfigTest(unittest.TestCase):
         self.assertEqual(ready.now_playing_url, '')
         self.assertTrue(ready.voice_debug)
         self.assertEqual(ready.missing(), [])
+
+    def test_volume_defaults_to_half_and_reads_a_percentage(self):
+        self.assertEqual(Config.from_env({}).volume, Volume(50))
+        self.assertEqual(Config.from_env({'VOLUME': '30%'}).volume, Volume(30))
+        self.assertEqual(Config.from_env({'VOLUME': 'loud'}).volume, Volume(50))
 
 
 class EnvFileTest(unittest.TestCase):
@@ -138,6 +144,23 @@ class RadioStreamTest(unittest.TestCase):
         self.assertIn('96k', args)
         self.assertEqual(args[-1], 'pipe:1')
         self.assertIn('ogg', args)
+
+    def test_ffmpeg_plays_at_half_volume_unless_told_otherwise(self):
+        args = FfmpegCommand.args('ff', 'http://s', 96)
+        self.assertEqual(args[args.index('-af') + 1], 'volume=0.50')
+        args = FfmpegCommand.args('ff', 'http://s', 96, Volume(25))
+        self.assertEqual(args[args.index('-af') + 1], 'volume=0.25')
+        # The filter must come after the input, or ffmpeg ignores it.
+        self.assertGreater(args.index('-af'), args.index('-i'))
+
+
+class VolumeTest(unittest.TestCase):
+    def test_keeps_within_1_and_100_percent(self):
+        self.assertEqual(Volume(0).percent, 1)
+        self.assertEqual(Volume(250).percent, 100)
+        self.assertEqual(Volume.parse(' 75 ').percent, 75)
+        self.assertEqual(Volume.parse('').percent, 50)
+        self.assertEqual(Volume(50).ffmpeg_filter(), 'volume=0.50')
 
 
 if __name__ == '__main__':
