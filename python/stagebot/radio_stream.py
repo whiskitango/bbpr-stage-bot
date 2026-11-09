@@ -19,6 +19,7 @@ import discord
 from discord.oggparse import OggStream
 
 from .backoff import Backoff
+from .stream_stall import StreamStall
 from .volume import Volume
 
 log = logging.getLogger('stagebot')
@@ -60,7 +61,10 @@ class RadioListener(discord.AudioSource):
 class FfmpegCommand:
     """The ffmpeg arguments that turn the station's stream into Ogg Opus at
     the bot's volume. Its reconnect flags ride out short network blips
-    without a gap."""
+    without a gap, and its read timeout turns a stalled connection into a
+    reconnect instead of an endless wait."""
+
+    READ_TIMEOUT_S = 15
 
     @staticmethod
     def args(ffmpeg: str, url: str, bitrate: int, volume: Optional[Volume] = None) -> List[str]:
@@ -69,6 +73,7 @@ class FfmpegCommand:
             ffmpeg, '-hide_banner', '-loglevel', 'error',
             '-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_on_network_error', '1',
             '-reconnect_delay_max', '5',
+            '-rw_timeout', str(FfmpegCommand.READ_TIMEOUT_S * 1_000_000),   # microseconds
             '-i', url,
             '-vn', '-af', volume.ffmpeg_filter(),
             '-c:a', 'libopus', '-b:a', f'{bitrate}k', '-ar', '48000', '-ac', '2',
@@ -80,11 +85,13 @@ class FfmpegCommand:
 
 class RadioStream:
     def __init__(self, url: str, ffmpeg: str = 'ffmpeg', bitrate: int = 128, backoff: Optional[Backoff] = None,
-                 volume: Optional[Volume] = None):
+                 volume: Optional[Volume] = None, stall: Optional[StreamStall] = None):
         self.url = url
         self.ffmpeg = ffmpeg
         self.bitrate = bitrate
         self.volume = volume or Volume()
+        self.stall = stall or StreamStall()
+        self.check_s = 1.0                 # how often the stall watcher looks
         self.backoff = backoff or Backoff()
         self.listeners: Set[RadioListener] = set()
         self.lock = threading.Lock()
@@ -136,10 +143,13 @@ class RadioStream:
             log.error(f'[ffmpeg] could not start {self.ffmpeg}: {err}')
             return
         threading.Thread(target=self.log_errors, args=(self.proc,), daemon=True).start()
+        self.stall.reset()
+        threading.Thread(target=self.watch_stall, args=(self.proc,), name='stream-stall', daemon=True).start()
         try:
             for packet in OggStream(self.proc.stdout).iter_packets():
                 if self.stopping.is_set():
                     break
+                self.stall.fed()
                 if packet.startswith(HEADERS):
                     continue
                 self.broadcast(packet)
@@ -147,6 +157,17 @@ class RadioStream:
             log.warning(f'[player] {err}')
         finally:
             self.close()
+
+    def watch_stall(self, proc: subprocess.Popen) -> bool:
+        """Ends this ffmpeg if the stream goes quiet, so the stream is reopened
+        like after any other drop. True if it did."""
+        while proc.poll() is None and not self.stopping.wait(self.check_s):
+            if self.stall.stalled():
+                log.warning(f'[player] no audio from the stream for {round(self.stall.quiet_for())} s; '
+                            'every server is silent, so reopening it')
+                proc.kill()
+                return True
+        return False
 
     @staticmethod
     def log_errors(proc: subprocess.Popen) -> None:

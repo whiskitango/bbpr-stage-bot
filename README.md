@@ -68,6 +68,30 @@ docker compose logs -f        (to watch it start)
 
 `restart: unless-stopped` brings it back after a reboot, and the saved channels live in a Docker volume.
 
+### The log file
+
+`docker compose logs` is lost whenever the container is made again (`--build`, or after changing `.env`).
+So the bot also keeps its log in a file in the data volume, with the time (UTC) on every line. It keeps
+the newest 10 MB plus five older files of 10 MB, then drops the oldest.
+
+```
+docker compose exec stage-bot tail -n 200 /data/logs/stagebot.log      (the latest lines)
+docker compose exec stage-bot grep -h "no audio\|stream ended\|speaker\|lost" /data/logs/stagebot.log*
+docker compose cp stage-bot:/data/logs/stagebot.log .                   (a copy here, even if it's stopped)
+```
+
+**If it goes silent**, look for these lines:
+
+| Line | What happened |
+|---|---|
+| `[player] no audio from the stream for 10 s` | The station's stream stalled. The bot reopens it by itself; every server was quiet meanwhile |
+| `[player] stream ended; reopening` / `[ffmpeg] …` | The stream dropped, or ffmpeg failed |
+| `[stage] could not become a speaker in …` | That Stage only: the bot is in the audience. Make it a Stage moderator |
+| `[stage] lost …` / `not connected …; rejoining` | That server's voice connection dropped |
+
+With `VOICE_DEBUG=yes` the bot also logs, every 15 s per channel, how many audio packets it sent and how many
+were silence: `packets` climbing means audio is going out; `silent` climbing means it has nothing to send.
+
 ## Settings (.env)
 
 | Setting | Needed | What it is |
@@ -80,7 +104,7 @@ docker compose logs -f        (to watch it start)
 | `STAGE_TOPIC` | no | The Stage's name. Defaults to *Booty Bay Pirate Radio* |
 | `BITRATE` | no | Kbps sent to Discord, 128 by default (Discord plays up to the server's voice bitrate) |
 | `VOLUME` | no | How loud it plays, as a % of the station's level: 1 to 100, 50 by default. The station is loud and Discord plays a bot at full volume, so full level blasts a Stage when the bot joins |
-| `DATA_DIR` | no | Where joined channels are saved |
+| `DATA_DIR` | no | Where joined channels and the log file (`logs/stagebot.log`) are saved |
 | `FFMPEG_PATH` | no | A specific ffmpeg to use |
 | `STATUS_PORT` | no | Turns on the listener-count page for radio-metrics (see below) |
 | `STATUS_TOKEN` | with `STATUS_PORT` | The password radio-metrics sends, at least 24 characters |

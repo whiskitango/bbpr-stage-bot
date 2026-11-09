@@ -47,6 +47,20 @@ class PresenceTest(unittest.TestCase):
         self.assertEqual(member.edits, 2)
         self.assertFalse(member.voice.suppress)
 
+    def test_a_refusal_is_logged_once_not_at_every_retry(self):
+        member = FakeMember(5)
+        p = self.presence(member)
+        with self.assertLogs('stagebot', level='WARNING') as logs:
+            for _ in range(3):
+                asyncio.run(p.speak())
+                p.refused_at -= stage_presence.SPEAK_RETRY_S + 1
+        self.assertEqual(member.edits, 3, 'it still tries again each time')
+        self.assertEqual(len(logs.output), 1)
+        self.assertIn('nobody there hears it', logs.output[0])
+        member.refuse = False
+        asyncio.run(p.speak())
+        self.assertFalse(p.refusal_logged, 'a later refusal is said again')
+
     def test_a_deleted_channel_is_given_up_and_forgotten(self):
         gone = []
         p = StagePresence(client=None, channel_id=5, stream=None, topic='T', on_gone=gone.append)

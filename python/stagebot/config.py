@@ -97,6 +97,10 @@ class Config:
     def channels_file(self) -> Path:
         return self.data_dir / 'channels.json'
 
+    @property
+    def log_folder(self) -> Path:
+        return self.data_dir / 'logs'
+
     def missing(self) -> List[str]:
         """Names of required settings that are missing; empty when ready."""
         need = {'DISCORD_TOKEN': self.token, 'STREAM_URL': self.stream_url}

@@ -11,6 +11,7 @@ import sys
 from stagebot.config import ROOT, Config
 from stagebot.env_file import EnvFile
 from stagebot.instance_lock import InstanceLock
+from stagebot.log_file import LogFile
 from stagebot.stage_bot import StageBot
 
 
@@ -20,8 +21,9 @@ class Launcher:
         self.bot: StageBot = None
 
     @staticmethod
-    def setup_logging(debug: bool) -> None:
+    def setup_logging(debug: bool, log_folder) -> None:
         logging.basicConfig(level=logging.INFO, format='%(message)s', stream=sys.stdout)
+        LogFile(log_folder).attach()
         logging.getLogger('discord').setLevel(logging.DEBUG if debug else logging.WARNING)
         if debug:
             logging.getLogger('discord.gateway').setLevel(logging.INFO)
@@ -38,7 +40,7 @@ class Launcher:
         if running:
             print(f'The bot is already running (process {running}). Stop that one first.', file=sys.stderr)
             return 1
-        self.setup_logging(config.voice_debug)
+        self.setup_logging(config.voice_debug, config.log_folder)
         try:
             asyncio.run(self.serve(config))
         except KeyboardInterrupt:
