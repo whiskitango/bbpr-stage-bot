@@ -57,6 +57,7 @@ class StagePresence:
         self.ready = False            # connected, settled and (on a Stage) stepped up
         self.leaving = False
         self.refused_at = 0.0
+        self.refusal_logged = False   # said once; repeating it every check buries the log
         self.health = ConnectionHealth()
 
     @property
@@ -222,12 +223,16 @@ class StagePresence:
         try:
             await me.edit(suppress=False)
             self.refused_at = 0.0
+            self.refusal_logged = False
             log.info(f'[stage] speaking in {self.label}')
             return True
         except discord.HTTPException as err:
             self.refused_at = now
-            log.warning(f'[stage] could not become a speaker in {self.label}, asking to speak instead '
-                        f'(make the bot a Stage moderator): {err}')
+            if not self.refusal_logged:
+                self.refusal_logged = True
+                log.warning(f'[stage] could not become a speaker in {self.label}, so nobody there hears it; '
+                            f'asking to speak instead, and trying again every {SPEAK_RETRY_S} s '
+                            f'(make the bot a Stage moderator): {err}')
             try:
                 await me.request_to_speak()
             except discord.HTTPException:
