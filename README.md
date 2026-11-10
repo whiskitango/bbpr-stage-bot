@@ -88,6 +88,7 @@ docker compose cp stage-bot:/data/logs/stagebot.log .                   (a copy 
 | `[player] stream ended; reopening` / `[ffmpeg] …` | The stream dropped, or ffmpeg failed |
 | `[stage] could not become a speaker in …` | That Stage only: the bot is in the audience. Make it a Stage moderator |
 | `[stage] lost …` / `not connected …; rejoining` | That server's voice connection dropped |
+| `[player] reopening the stream, as it does every 2 h` | Not a fault: the scheduled reopen from `STREAM_REFRESH_HOURS` |
 
 With `VOICE_DEBUG=yes` the bot also logs, every 15 s per channel, how many audio packets it sent and how many
 were silence: `packets` climbing means audio is going out; `silent` climbing means it has nothing to send.
@@ -104,6 +105,7 @@ were silence: `packets` climbing means audio is going out; `silent` climbing mea
 | `STAGE_TOPIC` | no | The Stage's name. Defaults to *Booty Bay Pirate Radio* |
 | `BITRATE` | no | Kbps sent to Discord, 128 by default (Discord plays up to the server's voice bitrate) |
 | `VOLUME` | no | How loud it plays, as a % of the station's level: 1 to 100, 50 by default. The station is loud and Discord plays a bot at full volume, so full level blasts a Stage when the bot joins |
+| `STREAM_REFRESH_HOURS` | no | Reopen the station's stream every so many hours, as a precaution (for example `2`). The bot stays in its channels; listeners hear a gap of about a second. Off by default |
 | `DATA_DIR` | no | Where joined channels and the log file (`logs/stagebot.log`) are saved |
 | `FFMPEG_PATH` | no | A specific ffmpeg to use |
 | `STATUS_PORT` | no | Turns on the listener-count page for radio-metrics (see below) |

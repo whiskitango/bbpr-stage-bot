@@ -9,6 +9,7 @@ import re
 from pathlib import Path
 from typing import List, Mapping, Optional
 
+from .stream_refresh import StreamRefresh
 from .volume import Volume
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -31,7 +32,7 @@ class Config:
                  bitrate: int = 128, data_dir: Path = DATA_DEFAULT, voice_debug: bool = False,
                  status_port: int = 0, status_host: str = STATUS_HOST_DEFAULT, status_token: str = '',
                  status_tls_cert: str = '', status_tls_key: str = '', station: str = '',
-                 volume: Optional[Volume] = None):
+                 volume: Optional[Volume] = None, stream_refresh: Optional[StreamRefresh] = None):
         self.token = token
         self.stage_channel_ids = stage_channel_ids or []   # joined at start, besides saved ones
         self.allowed_guild_ids = allowed_guild_ids or []   # empty: any server the bot is in
@@ -40,6 +41,7 @@ class Config:
         self.topic = topic
         self.bitrate = bitrate                             # kbps sent to Discord
         self.volume = volume or Volume()                   # % of the station's level
+        self.stream_refresh = stream_refresh or StreamRefresh()   # off unless STREAM_REFRESH_HOURS
         self.data_dir = Path(data_dir)
         self.voice_debug = voice_debug
         self.status_port = status_port                     # 0: no status page (see status_server.py)
@@ -82,6 +84,7 @@ class Config:
             status_tls_key=pick('STATUS_TLS_KEY', ''),
             station=pick('STATION', ''),
             volume=Volume.parse(pick('VOLUME', '')),
+            stream_refresh=StreamRefresh.parse(pick('STREAM_REFRESH_HOURS', '')),
         )
 
     @property
