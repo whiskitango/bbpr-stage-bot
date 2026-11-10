@@ -19,6 +19,7 @@ import discord
 from discord.oggparse import OggStream
 
 from .backoff import Backoff
+from .stream_refresh import StreamRefresh
 from .stream_stall import StreamStall
 from .volume import Volume
 
@@ -85,13 +86,16 @@ class FfmpegCommand:
 
 class RadioStream:
     def __init__(self, url: str, ffmpeg: str = 'ffmpeg', bitrate: int = 128, backoff: Optional[Backoff] = None,
-                 volume: Optional[Volume] = None, stall: Optional[StreamStall] = None):
+                 volume: Optional[Volume] = None, stall: Optional[StreamStall] = None,
+                 refresh: Optional[StreamRefresh] = None):
         self.url = url
         self.ffmpeg = ffmpeg
         self.bitrate = bitrate
         self.volume = volume or Volume()
         self.stall = stall or StreamStall()
-        self.check_s = 1.0                 # how often the stall watcher looks
+        self.refresh = refresh or StreamRefresh()
+        self.refreshing = False            # this ffmpeg was ended on schedule, not by a fault
+        self.check_s = 1.0                 # how often the watcher looks
         self.backoff = backoff or Backoff()
         self.listeners: Set[RadioListener] = set()
         self.lock = threading.Lock()
@@ -127,6 +131,9 @@ class RadioStream:
             self.play_once()
             if self.stopping.is_set():
                 break
+            if self.refreshing:
+                self.refreshing = False
+                continue                   # on schedule: reopen at once, no backoff
             wait = self.backoff.next()
             log.warning(f'[player] stream ended; reopening in {round(wait)} s')
             self.stopping.wait(wait)
@@ -144,7 +151,8 @@ class RadioStream:
             return
         threading.Thread(target=self.log_errors, args=(self.proc,), daemon=True).start()
         self.stall.reset()
-        threading.Thread(target=self.watch_stall, args=(self.proc,), name='stream-stall', daemon=True).start()
+        self.refresh.opened()
+        threading.Thread(target=self.watch, args=(self.proc,), name='stream-watch', daemon=True).start()
         try:
             for packet in OggStream(self.proc.stdout).iter_packets():
                 if self.stopping.is_set():
@@ -158,13 +166,18 @@ class RadioStream:
         finally:
             self.close()
 
-    def watch_stall(self, proc: subprocess.Popen) -> bool:
-        """Ends this ffmpeg if the stream goes quiet, so the stream is reopened
-        like after any other drop. True if it did."""
+    def watch(self, proc: subprocess.Popen) -> bool:
+        """Ends this ffmpeg if the stream goes quiet, or when its scheduled
+        refresh comes round, so the stream is reopened. True if it did."""
         while proc.poll() is None and not self.stopping.wait(self.check_s):
             if self.stall.stalled():
                 log.warning(f'[player] no audio from the stream for {round(self.stall.quiet_for())} s; '
                             'every server is silent, so reopening it')
+                proc.kill()
+                return True
+            if self.refresh.due():
+                log.info(f'[player] reopening the stream, as it does every {self.refresh.hours:g} h')
+                self.refreshing = True
                 proc.kill()
                 return True
         return False

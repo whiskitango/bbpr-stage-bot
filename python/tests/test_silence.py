@@ -5,6 +5,8 @@ from pathlib import Path
 
 from stagebot.log_file import LogFile
 from stagebot.radio_stream import FfmpegCommand, RadioStream
+from stagebot.config import Config
+from stagebot.stream_refresh import StreamRefresh
 from stagebot.stream_stall import StreamStall
 
 
@@ -54,7 +56,7 @@ class StallWatchTest(unittest.TestCase):
         clock.t += 25
         proc = FakeProc()
         with self.assertLogs('stagebot', level='WARNING') as logs:
-            self.assertTrue(stream.watch_stall(proc))
+            self.assertTrue(stream.watch(proc))
         self.assertTrue(proc.killed)
         self.assertIn('no audio from the stream for 25 s', logs.output[0])
 
@@ -63,14 +65,56 @@ class StallWatchTest(unittest.TestCase):
         stream = self.stream(clock)
         ended = FakeProc()
         ended.killed = True
-        self.assertFalse(stream.watch_stall(ended))
+        self.assertFalse(stream.watch(ended))
         stream.stopping.set()
-        self.assertFalse(stream.watch_stall(FakeProc()))
+        self.assertFalse(stream.watch(FakeProc()))
 
     def test_ffmpeg_gives_up_on_a_connection_that_sends_nothing(self):
         args = FfmpegCommand.args('ff', 'http://s', 128)
         self.assertEqual(args[args.index('-rw_timeout') + 1], '15000000')
         self.assertLess(args.index('-rw_timeout'), args.index('-i'), 'an input option goes before the input')
+
+
+
+class StreamRefreshTest(unittest.TestCase):
+    def test_off_unless_set_and_due_after_the_hours(self):
+        self.assertFalse(Config.from_env({}).stream_refresh.on)
+        self.assertEqual(Config.from_env({'STREAM_REFRESH_HOURS': '2'}).stream_refresh.hours, 2)
+        self.assertFalse(Config.from_env({'STREAM_REFRESH_HOURS': 'often'}).stream_refresh.on)
+        clock = Clock()
+        refresh = StreamRefresh(2, now=clock)
+        clock.t += 2 * 3600 - 1
+        self.assertFalse(refresh.due())
+        clock.t += 1
+        self.assertTrue(refresh.due())
+        refresh.opened()
+        self.assertFalse(refresh.due())
+        clock.t += 99 * 3600
+        self.assertFalse(StreamRefresh(0, now=clock).due())
+
+    def test_a_due_refresh_ends_ffmpeg_and_is_reopened_without_backoff(self):
+        clock = Clock()
+        stream = RadioStream('http://x', stall=StreamStall(limit=20, now=clock), refresh=StreamRefresh(2, now=clock))
+        stream.check_s = 0.001
+        clock.t += 2 * 3600
+        stream.stall.reset()                      # audio is flowing; only the schedule is due
+        proc = FakeProc()
+        with self.assertLogs('stagebot', level='INFO') as logs:
+            self.assertTrue(stream.watch(proc))
+        self.assertTrue(proc.killed)
+        self.assertTrue(stream.refreshing)
+        self.assertIn('every 2 h', logs.output[0])
+        opened = []
+
+        def play_once():
+            opened.append(1)
+            if len(opened) == 2:
+                stream.stopping.set()
+        stream.play_once = play_once
+        stream.backoff.next = lambda: self.fail('a scheduled reopen does not wait')
+        stream.run()
+        self.assertEqual(len(opened), 2)
+        self.assertFalse(stream.refreshing)
 
 
 class LogFileTest(unittest.TestCase):
